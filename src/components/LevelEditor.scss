@@ -1,0 +1,51 @@
+
+.level {
+  table.level-table {
+    border-collapse: collapse;
+
+    td {
+      border: 1px solid black;
+      width: 40px;
+      height: 40px;
+
+    }
+  }
+
+  .tool-chooser {
+    display: flex;
+    div {
+      margin: 5px;
+      //border: 2px solid transparent;
+      width: 30px;
+      height: 30px;
+
+      &.active{
+        //border: 2px solid black;
+        box-shadow: 0 0 10px black;
+      }
+    }
+  }
+
+  .tile-type-0 {
+    background-color: black;
+  }
+
+  .tile-type-1 {
+    background-color: gray;
+  }
+
+  .tile-type-2 {
+    background-color: #543213;
+  }
+}
+
+.level-editor {
+  display: flex;
+
+  .left {
+    padding: 20px;
+
+  }
+  .right {
+  }
+}
