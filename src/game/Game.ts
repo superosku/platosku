@@ -3,77 +3,110 @@ import {GameMap} from "./GameMap";
 import {Entity} from "./Entity";
 import {KeyboardHandler} from "./KeyboardHandler";
 import {getPointScore, SearchPointScoreMap} from "./SearchPointScoreMap";
-import {controlChoices, IControls, tileSize} from "../common";
+import {controlChoices, doNothingControls, IControls, tileSize} from "../common";
+import {Camera} from "./Camera";
+
+interface IPathItem {
+  x: number,
+  y: number,
+  controls: IControls
+}
 
 export class Game {
   map: GameMap
   player: Entity
+  follower: Entity
   keyboardHandler: KeyboardHandler
   debugPoints: { x: number, y: number }[]
   goalX: number
   goalY: number
-  debugRoute: { x: number, y: number }[]
   debugSearchPointScores: SearchPointScoreMap
+  frameIndex: number
+  followerPath: IPathItem[]
+  camera: Camera
 
-  constructor(keyboardHandler: KeyboardHandler) {
+  constructor(keyboardHandler: KeyboardHandler, canvasWidth: number, canvasHeight: number) {
     this.map = new GameMap()
     this.player = new Entity()
+    this.follower = new Entity()
+    this.camera = new Camera(canvasWidth, canvasHeight)
     this.keyboardHandler = keyboardHandler
     this.debugPoints = []
-    this.debugRoute = []
     this.goalX = 0
     this.goalY = 0
-    this.debugSearchPointScores = new SearchPointScoreMap()
+    this.debugSearchPointScores = new SearchPointScoreMap(this.map)
+    this.frameIndex = 0
+    this.followerPath = []
   }
 
-  updateGoal(x: number, y: number) {
-    this.goalX = x
-    this.goalY = y
+  updateGoalFromMouse(x: number, y: number) {
+    // this.goalX = x
+    // this.goalY = y
   }
 
   draw(ctx: CanvasRenderingContext2D) {
-    this.map.draw(ctx, this.debugSearchPointScores)
-    this.player.draw(ctx)
+    this.map.draw(ctx, this.camera, this.debugSearchPointScores)
+    this.player.draw(ctx, this.camera)
+    this.follower.draw(ctx, this.camera)
 
-    for (let i = 0; i < this.debugPoints.length; i++) {
-      const db = this.debugPoints[i]
-      ctx.strokeStyle = 'rgba(32, 181, 39, 0.25)';
-      ctx.beginPath();
-      ctx.arc((db.x + this.player.width / 2) * tileSize, (db.y + this.player.height / 2) * tileSize, 1, 0, 2 * Math.PI);
+    // Draw debug points
+    if (false) {
+      for (let i = 0; i < this.debugPoints.length; i++) {
+        const db = this.debugPoints[i]
+        ctx.strokeStyle = 'rgba(32, 181, 39, 0.25)';
+        ctx.beginPath();
+        ctx.arc((db.x + this.follower.width / 2) * tileSize, (db.y + this.follower.height / 2) * tileSize, 1, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+    }
+
+    // Draw path
+    if (this.followerPath.length > 3) {
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(
+        this.camera.gameToScreenX(this.followerPath[0].x + this.follower.width / 2),
+        this.camera.gameToScreenY(this.followerPath[1].y + this.follower.height / 2),
+      )
+      ctx.strokeStyle = '#cd264d';
+      for (let i = 1; i < this.followerPath.length; i++) {
+        const db = this.followerPath[i]
+        ctx.lineTo(
+          this.camera.gameToScreenX(db.x + this.follower.width / 2),
+          this.camera.gameToScreenY(db.y + this.follower.height / 2)
+        );
+      }
       ctx.stroke();
     }
-
-    if (this.debugRoute.length < 2) {
-      return
-    }
-    // console.log('drawing debugRoute', this.debugRoute.length)
-    ctx.lineWidth = 2
-    ctx.beginPath()
-    ctx.moveTo((this.debugRoute[0].x + this.player.width / 2) * tileSize, (this.debugRoute[1].y + this.player.height / 2) * tileSize)
-    ctx.strokeStyle = '#cd264d';
-    for (let i = 1; i < this.debugRoute.length; i++) {
-      const db = this.debugRoute[i]
-      ctx.lineTo((db.x + this.player.width / 2) * tileSize, (db.y + this.player.height / 2) * tileSize);
-    }
-    ctx.stroke();
   }
 
   update() {
-    const searchResult = this.routeSearch(this.player, this.goalX, this.goalY)
-    this.debugRoute = searchResult.path
-    if (searchResult.winningControls) {
-      this.player.updateFromControls(searchResult.winningControls)
+    if (this.frameIndex % (60 * 3) === 0 && this.frameIndex !== 0) {
+      const path = this.routeSearch(this.follower, this.player.x, this.player.y)
+      this.followerPath = path
     }
+    // const searchResult = this.routeSearch(this.follower, this.goalX, this.goalY)
+    if (this.followerPath.length > 0) {
+      const pathItem = this.followerPath.shift()
+      if (pathItem) {
+        const {controls} = pathItem
+        this.follower.updateFromControls(controls)
+      }
+    } else {
+      this.follower.updateFromControls(doNothingControls) // Do nothing
+    }
+    this.player.updateFromKeyboard(this.keyboardHandler)
+
+    this.follower.update(this.map)
     this.player.update(this.map)
+    this.frameIndex += 1
+
+    this.camera.moveTowards(this.player.x, this.player.y)
   }
 
   routeSearch(entity: Entity, goalX: number, goalY: number) {
-    this.map.updatePointScoreMap(this.debugSearchPointScores, goalX, goalY)
+    this.map.updatePointScoreMap(this.debugSearchPointScores, Math.floor(goalX), Math.floor(goalY))
     const pointScores = this.debugSearchPointScores
-    // const pointScores = this.debugSearchPointScores
-    // pointScores.reset()
-    // const pointScores = new Map()
-    // this.debugSearchPointScores = pointScores
 
     interface HandledEntity {
       entity: Entity,
@@ -83,25 +116,10 @@ export class Game {
 
     this.debugPoints = []
 
-    // let entities: HandledEntity[] = [{entity: entity.clone(), parent: undefined, controls: undefined}]
-
     let hasher: { [key: string]: boolean } = {}
-
     let winner: HandledEntity | undefined = undefined
 
-
     const scoreEntity = (a: HandledEntity): number => {
-      // const distScore = Math.pow(a.entity.x - (goalX + 0.5), 2) + Math.pow(a.entity.y - (goalY + 0.5), 2)
-      // return distScore
-
-      // const tileScore = pointScores.get(
-      //   Math.floor(a.entity.x + a.entity.width / 2),
-      //   Math.floor(a.entity.y + a.entity.height / 2)
-      // ) || 9999
-      // return tileScore
-
-      // return tileScore * 20 + distScore
-
       const center = a.entity.getCenter()
       return getPointScore(center, pointScores)
     }
@@ -123,15 +141,6 @@ export class Game {
     })
 
     outerLoop: for (let i = 0; i < 500; i++) {
-      // entities = entities.sort((a, b) => {
-      //   return (
-      //     scoreEntity(a) < scoreEntity(b)
-      //     // 10 * aTileScore + aDistScore < 10 * bTileScore + bDistScore
-      //     // Math.pow(a.entity.x - goalX, 2) + Math.pow(a.entity.y - goalY, 2) <
-      //     // Math.pow(b.entity.x - goalX, 2) + Math.pow(b.entity.y - goalY, 2)
-      //   ) ? -1 : 1
-      // })
-
       const handledEntity = entities.pop()
 
       if (!handledEntity) {
@@ -178,7 +187,7 @@ export class Game {
       }
     }
 
-    let path: { x: number, y: number }[] = []
+    let path: IPathItem[] = []
     let current = winner
     let winningControls = undefined
 
@@ -188,16 +197,16 @@ export class Game {
       }
       if (current.controls) {
         winningControls = current.controls
+        path.push({
+          x: current.entity.x,
+          y: current.entity.y,
+          controls: current.controls
+        })
       }
-      path.push({x: current.entity.x, y: current.entity.y})
       current = current.parent
     }
 
-    // console.log('path len', path.length)
-
-    return {
-      path,
-      winningControls
-    }
+    path.reverse()
+    return path
   }
 }

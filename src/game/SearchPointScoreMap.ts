@@ -1,4 +1,5 @@
 import {IPoint, range} from "../common";
+import {GameMap} from "./GameMap";
 
 export const getPointScore = (pointt: IPoint, pointScores: SearchPointScoreMap): number => {
   const point: IPoint = {x: pointt.x - 0.5, y: pointt.y - 0.5}
@@ -158,9 +159,9 @@ export class SearchPointScoreMap {
   width: number
   height: number
 
-  constructor() {
-    this.height = 12
-    this.width = 30
+  constructor(gameMap: GameMap) {
+    this.height = gameMap.height
+    this.width = gameMap.width
     this.data = range(this.width * this.height).map(n => -1)
   }
 

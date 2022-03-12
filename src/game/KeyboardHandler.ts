@@ -12,7 +12,6 @@ export class KeyboardHandler {
   }
 
   keydown(event: KeyboardEvent) {
-    console.log('keydown', event.key)
     this.keysPressed[event.key] = true
   }
 

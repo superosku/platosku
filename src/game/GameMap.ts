@@ -1,5 +1,12 @@
-import {IPoint, range, tileSize} from "../common";
+import {IPoint, levelHeight, levelWidth, mapHeight, mapWidth, range, tileSize} from "../common";
 import {SearchPointScoreMap} from "./SearchPointScoreMap";
+import {ILevelData} from "../components/LevelEditor";
+import {getRandomMap, IRandomMap} from "./levels";
+
+import * as levelsJson from "../levels.json"
+import {Camera} from "./Camera";
+
+const levelData: ILevelData = (levelsJson as any).default as ILevelData
 
 export class GameMap {
   data: number[][]
@@ -7,30 +14,27 @@ export class GameMap {
   height: number
 
   constructor() {
-    this.height = 12
-    this.width = 30
+    const randomMap: IRandomMap = getRandomMap(levelData)
+
+    this.height = levelHeight * mapHeight
+    this.width = levelWidth * mapWidth
+
     this.data = range(this.width).map(x => range(this.height).map(y => {
-      // if (x === 7 || x === 2 || y === 7 || y === 4) {
-      //   return 1
-      // }
-      // return 0
-      return Math.random() < 0.8 ? 0 : 1
+      return 0
     }))
 
-    for (let y = 0; y < this.height; y++) {
-      if (this.data[2][y] == 0) {
-        this.data[2][y] = 2
+    for (let xx = 0; xx < mapWidth; xx++) {
+      for (let yy = 0; yy < mapHeight; yy++) {
+        for (let x = 0; x < levelWidth; x++) {
+          for (let y = 0; y < levelHeight; y++) {
+            const outputX = x + xx * levelWidth
+            const outputY = y + yy * levelHeight
+            const level = randomMap.levels[xx][yy]
+            this.data[outputX][outputY] = level.data[x][y]
+          }
+        }
       }
-      // if (this.data[12][y] == 0) {
-      //   this.data[12][y] = 2
-      // }
     }
-
-    // this.data[0][0] = 0
-    // this.data[0][2] = 1
-
-    // console.log(JSON.stringify(this.data))
-    this.data = JSON.parse('[[0,1,1,1,1,1,0,0,0,0,1,0],[1,1,0,0,0,1,1,0,0,1,0,0],[2,2,2,1,2,2,2,2,2,2,2,2],[1,1,0,0,1,0,1,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,1,0,0,1,0,1,0,0,1],[0,1,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,1,0,1,0,1,0],[0,0,0,1,0,0,0,0,0,0,0,1],[0,0,1,0,0,0,0,0,0,0,1,0],[1,0,0,1,0,0,0,0,0,1,0,0],[0,0,0,0,1,0,0,0,0,0,0,1],[2,2,2,2,2,2,2,2,2,2,1,2],[0,0,0,1,1,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[1,1,0,0,0,0,0,0,0,0,0,1],[0,0,1,0,0,0,0,1,1,0,0,1],[0,0,1,0,0,0,0,0,0,0,0,0],[1,0,0,0,0,0,1,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,1,0,1],[0,0,0,1,0,0,1,0,0,0,0,1],[0,0,0,0,0,1,0,0,1,1,0,0],[0,0,0,0,0,0,0,0,0,0,1,0],[0,0,0,0,0,0,0,0,0,1,0,0],[1,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,1,0,1,0,0,0,1,0],[0,0,0,0,0,0,0,0,0,1,1,0],[0,0,0,0,0,0,0,0,0,0,0,0],[1,0,0,0,0,1,0,0,1,0,0,1]]\n')
   }
 
   updatePointScoreMap(pointScores: SearchPointScoreMap, goalX: number, goalY: number) {
@@ -47,8 +51,7 @@ export class GameMap {
 
     while (queue) {
       i++
-      if (i > 10000) {
-        console.log('WTF')
+      if (i > 1000) {
         return pointScores
       }
 
@@ -115,7 +118,7 @@ export class GameMap {
     // return pointScores
   }
 
-  draw(ctx: CanvasRenderingContext2D, debugPointScores?: SearchPointScoreMap) {
+  draw(ctx: CanvasRenderingContext2D, camera: Camera, debugPointScores: SearchPointScoreMap) {
     for (let x = 0; x < this.width; x++) {
       for (let y = 0; y < this.height; y++) {
         ctx.fillStyle = '#000000'
@@ -123,28 +126,33 @@ export class GameMap {
           ctx.fillStyle = '#9f9388';
         }
 
-        if (debugPointScores && this.at(x, y) !== 1) {
-          const ps = debugPointScores.get(x, y)
-          if (ps) {
-            const score = 255 - Math.min(255, Math.max(0, Math.floor(ps * 10 + 128)))
-            ctx.fillStyle = `rgb(${score}, ${score}, ${score})`
-          }
-        }
+        // if (debugPointScores && this.at(x, y) !== 1) {
+        //   const ps = debugPointScores.get(x, y)
+        //   if (ps !== undefined) {
+        //     const score = 255 - Math.min(255, Math.max(0, Math.floor(ps * 10 + 128)))
+        //     ctx.fillStyle = `rgb(${score}, ${score}, ${score})`
+        //   }
+        // }
 
-        ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+        ctx.fillRect(
+          camera.gameToScreenX(x),
+          camera.gameToScreenY(y),
+          tileSize,
+          tileSize
+        );
         if (this.data[x][y] === 2) {
           ctx.beginPath()
           ctx.strokeStyle = '#4c350a'
 
           // ctx.moveTo(0,0)
           // ctx.lineTo(1000, 1000)
-          ctx.moveTo(x * tileSize + 4, y * tileSize)
-          ctx.lineTo(x * tileSize + 4, y * tileSize + tileSize)
-          ctx.moveTo(x * tileSize + tileSize - 4, y * tileSize)
-          ctx.lineTo(x * tileSize + tileSize - 4, y * tileSize + tileSize)
+          ctx.moveTo(camera.gameToScreenX(x) + 4, camera.gameToScreenY(y))
+          ctx.lineTo(camera.gameToScreenX(x) + 4, camera.gameToScreenY(y + 1))
+          ctx.moveTo(camera.gameToScreenX(x + 1) - 4, camera.gameToScreenY(y))
+          ctx.lineTo(camera.gameToScreenX(x + 1) - 4, camera.gameToScreenY(y + 1))
           for (let i = 0; i < 4; i++) {
-            ctx.moveTo(x * tileSize, y * tileSize + i * 8)
-            ctx.lineTo(x * tileSize + tileSize, y * tileSize + i * 8)
+            ctx.moveTo(camera.gameToScreenX(x), camera.gameToScreenY(y) + i * 8)
+            ctx.lineTo(camera.gameToScreenX(x + 1), camera.gameToScreenY(y) + i * 8)
           }
           ctx.stroke();
         }

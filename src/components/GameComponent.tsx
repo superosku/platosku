@@ -15,7 +15,7 @@ export const GameComponent = () => {
     const ctx: CanvasRenderingContext2D = canvas.getContext("2d")!
 
     const keyboardHandler = new KeyboardHandler()
-    const game = new Game(keyboardHandler)
+    const game = new Game(keyboardHandler, canvas.width, canvas.height)
 
     window.addEventListener('keyup', (event) => {
       keyboardHandler.keyup(event)
@@ -25,14 +25,14 @@ export const GameComponent = () => {
     })
 
     window.addEventListener('mousemove', (event) => {
-      game.updateGoal(
+      game.updateGoalFromMouse(
         Math.floor(event.pageX / tileSize),
         Math.floor(event.pageY / tileSize)
       )
     })
 
     let fps: number[] = []
-    const fpsFrames = 30
+    const fpsFrames = 10
 
     const interval = window.setInterval(() => {
         fps.push((new Date).getTime())
@@ -61,7 +61,7 @@ export const GameComponent = () => {
     <canvas
       ref={canvasRef}
       width={1000}
-      height={1000}
+      height={600}
     />
   </div>
 }

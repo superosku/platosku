@@ -1,13 +1,48 @@
 
-.level {
-  table.level-table {
-    border-collapse: collapse;
+.level-table {
+  border-collapse: collapse;
+  td {
+  }
+}
 
+ul.level-list {
+  margin: 0;
+  padding: 0;
+  list-style-type: none;
+  .level-table {
     td {
-      border: 1px solid black;
+      width: 3px;
+      height: 3px;
+    }
+  }
+  li {
+    border: 1px solid #d6d6d6;
+    margin: 5px;
+    padding: 5px;
+  }
+  li.active {
+    border: 1px solid black;
+  }
+}
+
+.tile-type-0 {
+  background-color: black;
+}
+
+.tile-type-1 {
+  background-color: gray;
+}
+
+.tile-type-2 {
+  background-color: #543213;
+}
+
+.level {
+  .level-table {
+    td {
       width: 40px;
       height: 40px;
-
+      border: 1px solid black;
     }
   }
 
@@ -25,21 +60,9 @@
       }
     }
   }
-
-  .tile-type-0 {
-    background-color: black;
-  }
-
-  .tile-type-1 {
-    background-color: gray;
-  }
-
-  .tile-type-2 {
-    background-color: #543213;
-  }
 }
 
-.level-editor {
+.level-editor>.upper {
   display: flex;
 
   .left {
@@ -47,5 +70,27 @@
 
   }
   .right {
+  }
+}
+
+.level-randomizer {
+  padding: 10px;
+  .map-table {
+    border-collapse: collapse;
+    td {
+      padding: 0;
+    }
+  }
+  .level-table {
+    td {
+      width: 10px;
+      height: 10px;
+    }
+  }
+}
+
+.side-type-chooser {
+  .active {
+    font-weight: bold;
   }
 }

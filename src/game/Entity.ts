@@ -1,6 +1,7 @@
 import {IControls, tileSize} from "../common";
 import {GameMap} from "./GameMap";
 import {KeyboardHandler} from "./KeyboardHandler";
+import {Camera} from "./Camera";
 
 
 export class Entity {
@@ -28,12 +29,19 @@ export class Entity {
     this.jumpedSinceFrames = 0
   }
 
-  draw(ctx: CanvasRenderingContext2D) {
+  draw(ctx: CanvasRenderingContext2D, camera: Camera) {
     ctx.fillStyle = '#9137a9';
     if (this.isOnGround) {
       ctx.fillStyle = '#312853';
     }
-    ctx.fillRect(this.x * tileSize, this.y * tileSize, tileSize * this.width, tileSize * this.height);
+    ctx.fillRect(
+      camera.gameToScreenX(this.x),
+      camera.gameToScreenY(this.y),
+      // this.x * tileSize,
+      // this.y * tileSize,
+      tileSize * this.width,
+      tileSize * this.height
+    );
   }
 
   getSearchHash() {
