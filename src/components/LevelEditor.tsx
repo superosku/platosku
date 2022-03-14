@@ -1,7 +1,7 @@
 import './LevelEditor.scss'
 import * as levelsJson from "../levels.json"
 import React from "react";
-import {levelHeight, levelWidth, range} from "../common";
+import {IPoint, levelHeight, levelWidth, range} from "../common";
 import {LevelTable} from "./LevelTable";
 import {LevelRandomizer} from "./LevelRandomizer";
 import {SingleLevelEditor} from "./SingleLevelEditor";
@@ -16,12 +16,18 @@ export const levelSideTypes = [
   'right-open',
 ]
 
+export const tagTypes = [
+  'start-door',
+  'end-door',
+]
+
 export interface ILevel {
   data: number[][]
   leftType: string
   rightType: string
   bottomType: string
   topType: string
+  tags: string[]
 }
 
 export interface ILevelData {
@@ -42,6 +48,7 @@ const getInitialLevel = (): ILevel => {
     rightType: 'blocked',
     topType: 'blocked',
     bottomType: 'blocked',
+    tags: []
   }
 }
 

@@ -1,6 +1,6 @@
 import React from "react";
 import {LevelTable} from "./LevelTable";
-import {ILevel, levelSideTypes} from "./LevelEditor";
+import {ILevel, levelSideTypes, tagTypes} from "./LevelEditor";
 
 interface ISideTypeChooserProps {
   value: string
@@ -45,7 +45,7 @@ export const SingleLevelEditor: React.FC<ISingleLevelEditorProps> = (
   return <div className={'level'}>
     <div className={'tool-chooser'}>
       {
-        [0, 1, 2].map(n => {
+        [0, 1, 2, 3, 4].map(n => {
           return <div
             key={n}
             className={`tile-type-${n}` + (n === tool ? ' active' : '')}
@@ -55,6 +55,25 @@ export const SingleLevelEditor: React.FC<ISingleLevelEditorProps> = (
         })
       }
     </div>
+    <ul className={'tag-selector'}>
+      {tagTypes.map(tag => {
+        const currentTags = level.tags || []
+        const selected = currentTags.indexOf(tag) >= 0
+        return <li
+          className={selected ? 'selected' : ''}
+          key={tag}
+          onClick={() => {
+            if (selected) {
+              setLevel({...level, tags: currentTags.filter(t => t !== tag)})
+            } else {
+              setLevel({...level, tags: [...currentTags, tag]})
+            }
+          }}
+        >
+          {tag}
+        </li>
+      })}
+    </ul>
     <table>
       <tbody>
       <tr>

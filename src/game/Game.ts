@@ -3,7 +3,7 @@ import {GameMap} from "./GameMap";
 import {Entity} from "./Entity";
 import {KeyboardHandler} from "./KeyboardHandler";
 import {getPointScore, SearchPointScoreMap} from "./SearchPointScoreMap";
-import {controlChoices, doNothingControls, IControls, tileSize} from "../common";
+import {controlChoices, doNothingControls, IControls, IPoint} from "../common";
 import {Camera} from "./Camera";
 
 interface IPathItem {
@@ -17,7 +17,7 @@ export class Game {
   player: Entity
   follower: Entity
   keyboardHandler: KeyboardHandler
-  debugPoints: { x: number, y: number }[]
+  debugPoints: IPoint[]
   goalX: number
   goalY: number
   debugSearchPointScores: SearchPointScoreMap
@@ -27,8 +27,9 @@ export class Game {
 
   constructor(keyboardHandler: KeyboardHandler, canvasWidth: number, canvasHeight: number) {
     this.map = new GameMap()
-    this.player = new Entity()
-    this.follower = new Entity()
+    const startPos = this.map.getStartCoors()
+    this.player = new Entity(startPos)
+    this.follower = new Entity(startPos)
     this.camera = new Camera(canvasWidth, canvasHeight)
     this.keyboardHandler = keyboardHandler
     this.debugPoints = []
@@ -50,14 +51,18 @@ export class Game {
     this.follower.draw(ctx, this.camera)
 
     // Draw debug points
-    if (false) {
-      for (let i = 0; i < this.debugPoints.length; i++) {
-        const db = this.debugPoints[i]
-        ctx.strokeStyle = 'rgba(32, 181, 39, 0.25)';
-        ctx.beginPath();
-        ctx.arc((db.x + this.follower.width / 2) * tileSize, (db.y + this.follower.height / 2) * tileSize, 1, 0, 2 * Math.PI);
-        ctx.stroke();
-      }
+    for (let i = 0; i < this.debugPoints.length; i++) {
+      const db = this.debugPoints[i]
+      ctx.strokeStyle = 'rgba(32, 181, 39, 0.25)';
+      ctx.beginPath();
+      ctx.arc(
+        this.camera.gameToScreenX(db.x + this.follower.width / 2),
+        this.camera.gameToScreenY(db.y + this.follower.height / 2),
+        1,
+        0,
+        2 * Math.PI
+      );
+      ctx.stroke();
     }
 
     // Draw path
@@ -81,11 +86,15 @@ export class Game {
   }
 
   update() {
+    if (this.keyboardHandler.pressed('t')) {
+      const {debugPoints} = this.routeSearch(this.player, 0, 0, 200, false)
+      this.debugPoints = debugPoints
+    }
+
     if (this.frameIndex % (60 * 3) === 0 && this.frameIndex !== 0) {
-      const path = this.routeSearch(this.follower, this.player.x, this.player.y)
+      const {path} = this.routeSearch(this.follower, this.player.x, this.player.y)
       this.followerPath = path
     }
-    // const searchResult = this.routeSearch(this.follower, this.goalX, this.goalY)
     if (this.followerPath.length > 0) {
       const pathItem = this.followerPath.shift()
       if (pathItem) {
@@ -104,7 +113,13 @@ export class Game {
     this.camera.moveTowards(this.player.x, this.player.y)
   }
 
-  routeSearch(entity: Entity, goalX: number, goalY: number) {
+  routeSearch(
+    entity: Entity,
+    goalX: number,
+    goalY: number,
+    maxPoints: number = 500,
+    sort: boolean = true,
+  ) {
     this.map.updatePointScoreMap(this.debugSearchPointScores, Math.floor(goalX), Math.floor(goalY))
     const pointScores = this.debugSearchPointScores
 
@@ -114,7 +129,7 @@ export class Game {
       controls: IControls | undefined
     }
 
-    this.debugPoints = []
+    const debugPoints: IPoint[] = []
 
     let hasher: { [key: string]: boolean } = {}
     let winner: HandledEntity | undefined = undefined
@@ -133,14 +148,36 @@ export class Game {
       return scoreA < scoreB ? -1 : 1
     }
 
-    let entities = new Heap<HandledEntity>(compareEntity);
+    class UnsortedHeap<T> {
+      data: T[]
+
+      constructor() {
+        this.data = []
+      }
+
+      push(item: T) {
+        this.data.push(item)
+      }
+
+      pop(): T {
+        if (this.data.length === 0) {
+          throw "Could not pop"
+        }
+        return this.data.shift() as T
+      }
+    }
+
+    // let entities = new Heap<HandledEntity>(compareEntity);
+    // let entities = new UnsortedHeap<HandledEntity>()
+    let entities = sort ? new Heap<HandledEntity>(compareEntity) : new UnsortedHeap<HandledEntity>()
+
     entities.push({
       entity: entity.clone(),
       parent: undefined,
       controls: undefined
     })
 
-    outerLoop: for (let i = 0; i < 500; i++) {
+    outerLoop: for (let i = 0; i < maxPoints; i++) {
       const handledEntity = entities.pop()
 
       if (!handledEntity) {
@@ -167,7 +204,7 @@ export class Game {
           controls: controls,
         }
 
-        if (Math.floor(newEntity.x) === goalX && Math.floor(newEntity.y) === goalY) {
+        if (Math.floor(newEntity.x) === Math.floor(goalX) && Math.floor(newEntity.y) === Math.floor(goalY)) {
           winner = newHandledEntity
           break outerLoop
         }
@@ -181,7 +218,7 @@ export class Game {
           winner = newHandledEntity
         }
 
-        this.debugPoints.push({x: newEntity.x, y: newEntity.y})
+        debugPoints.push({x: newEntity.x, y: newEntity.y})
         entities.push(newHandledEntity)
         hasher[newEntity.getSearchHash()] = true
       }
@@ -207,6 +244,9 @@ export class Game {
     }
 
     path.reverse()
-    return path
+    return {
+      path,
+      debugPoints
+    }
   }
 }

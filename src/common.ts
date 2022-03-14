@@ -1,4 +1,4 @@
-export const tileSize = 32
+export const tileSize = 48
 
 // For a single map tile
 export const levelHeight = 8
@@ -6,7 +6,7 @@ export const levelWidth = 12
 
 // how many map tiles
 export const mapWidth = 5
-export const mapHeight = 5
+export const mapHeight = 4
 
 export const range = (n: number) => {
   let l = []
@@ -36,9 +36,9 @@ export interface IControls {
 export const doNothingControls: IControls = {left: false, right: false, down: false, up: false, jump: false}
 
 export const controlChoices: IControls[] = [
-  doNothingControls, // Do nothing
   {left: false, right: false, down: false, up: true, jump: false}, // Go up
   {left: false, right: false, down: true, up: false, jump: false}, // Go down
+  doNothingControls, // Do nothing
 
   {left: true, right: false, down: false, up: false, jump: false}, // Move left
   {left: false, right: true, down: false, up: false, jump: false}, // Move right

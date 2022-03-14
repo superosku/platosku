@@ -37,12 +37,26 @@ ul.level-list {
   background-color: #543213;
 }
 
+.tile-type-3 {
+  background-color: green;
+}
+
+.tile-type-4 {
+  background-color: red;
+}
+
 .level {
   .level-table {
     td {
       width: 40px;
       height: 40px;
       border: 1px solid black;
+    }
+  }
+
+  .tag-selector {
+    >li.selected {
+      font-weight: bold;
     }
   }
 
@@ -77,8 +91,16 @@ ul.level-list {
   padding: 10px;
   .map-table {
     border-collapse: collapse;
-    td {
+    border-spacing: 0;
+    td.map-table-item {
       padding: 0;
+
+      opacity: 0.6;
+      //border: 4px solid transparent;
+      &.route {
+        opacity: 1;
+        //border: 4px solid #ff19fc;
+      }
     }
   }
   .level-table {

@@ -1,5 +1,5 @@
 import {IPoint, levelHeight, levelWidth, mapHeight, mapWidth, range, tileSize} from "../common";
-import {SearchPointScoreMap} from "./SearchPointScoreMap";
+import {getPointScore, SearchPointScoreMap} from "./SearchPointScoreMap";
 import {ILevelData} from "../components/LevelEditor";
 import {getRandomMap, IRandomMap} from "./levels";
 
@@ -35,6 +35,18 @@ export class GameMap {
         }
       }
     }
+  }
+
+  getStartCoors(): IPoint {
+    for (let x = 0; x < this.width; x++) {
+      for (let y = 0; y < this.width; y++) {
+        if (this.at(x, y) === 3) {
+          return {x, y}
+        }
+      }
+    }
+
+    return {x: 2, y: 2}
   }
 
   updatePointScoreMap(pointScores: SearchPointScoreMap, goalX: number, goalY: number) {
@@ -119,11 +131,22 @@ export class GameMap {
   }
 
   draw(ctx: CanvasRenderingContext2D, camera: Camera, debugPointScores: SearchPointScoreMap) {
-    for (let x = 0; x < this.width; x++) {
-      for (let y = 0; y < this.height; y++) {
-        ctx.fillStyle = '#000000'
+    const boundaries = camera.getDrawBoundaries()
+
+    const startDrawX = camera.gameToScreenX(0)
+    const startDrawY = camera.gameToScreenY(0)
+
+    for (let x = Math.max(0, boundaries.topLeftX); x < Math.min(boundaries.bottomRightX, this.width); x++) {
+      for (let y = Math.max(0, boundaries.topLeftY); y < Math.min(boundaries.bottomRightY, this.height); y++) {
+        ctx.fillStyle = '#1a1c1d'
         if (this.data[x][y] === 1) {
-          ctx.fillStyle = '#9f9388';
+          ctx.fillStyle = '#8a8a8a';
+        }
+        if (this.data[x][y] === 3) {
+          ctx.fillStyle = '#62b52b';
+        }
+        if (this.data[x][y] === 4) {
+          ctx.fillStyle = '#b34949';
         }
 
         // if (debugPointScores && this.at(x, y) !== 1) {
@@ -135,14 +158,19 @@ export class GameMap {
         // }
 
         ctx.fillRect(
-          camera.gameToScreenX(x),
-          camera.gameToScreenY(y),
+          startDrawX + tileSize * x,
+          startDrawY + tileSize * y,
+          // camera.gameToScreenX(x),
+          // camera.gameToScreenY(y),
           tileSize,
           tileSize
         );
         if (this.data[x][y] === 2) {
           ctx.beginPath()
-          ctx.strokeStyle = '#4c350a'
+          ctx.lineWidth = 4
+          ctx.strokeStyle = '#543f16'
+
+          const ladderSpacing = tileSize / 4
 
           // ctx.moveTo(0,0)
           // ctx.lineTo(1000, 1000)
@@ -151,8 +179,8 @@ export class GameMap {
           ctx.moveTo(camera.gameToScreenX(x + 1) - 4, camera.gameToScreenY(y))
           ctx.lineTo(camera.gameToScreenX(x + 1) - 4, camera.gameToScreenY(y + 1))
           for (let i = 0; i < 4; i++) {
-            ctx.moveTo(camera.gameToScreenX(x), camera.gameToScreenY(y) + i * 8)
-            ctx.lineTo(camera.gameToScreenX(x + 1), camera.gameToScreenY(y) + i * 8)
+            ctx.moveTo(camera.gameToScreenX(x), camera.gameToScreenY(y) + i * ladderSpacing)
+            ctx.lineTo(camera.gameToScreenX(x + 1), camera.gameToScreenY(y) + i * ladderSpacing)
           }
           ctx.stroke();
         }

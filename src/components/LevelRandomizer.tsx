@@ -1,4 +1,4 @@
-import {ILevel, ILevelData} from "./LevelEditor";
+import {ILevelData} from "./LevelEditor";
 import React from "react";
 import {mapHeight, mapWidth, range} from "../common";
 import {LevelTable} from "./LevelTable";
@@ -28,7 +28,12 @@ export const LevelRandomizer: React.FC<ILevelRandomizerProps> = (
           return <tr key={y}>
             {
               range(mapWidth).map(x => {
-                return <td key={x}>
+                const partOfRoute = map.route.findIndex((point) => point.x === x && point.y === y) >= 0
+
+                return <td
+                  key={x}
+                  className={'map-table-item ' + (partOfRoute ? 'route' : '')}
+                >
                   <LevelTable level={map.levels[x][y]}/>
                 </td>
               })

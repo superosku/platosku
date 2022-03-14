@@ -1,4 +1,4 @@
-import {IControls, tileSize} from "../common";
+import {IControls, IPoint, tileSize} from "../common";
 import {GameMap} from "./GameMap";
 import {KeyboardHandler} from "./KeyboardHandler";
 import {Camera} from "./Camera";
@@ -12,27 +12,42 @@ export class Entity {
   speedx: number
   speedy: number
   isOnGround: boolean
+
   couldUseLadder: boolean
   isUsingLadder: boolean
-  jumpedSinceFrames: number
 
-  constructor() {
-    this.x = 3
-    this.y = 3
-    this.width = 0.7
-    this.height = 0.9
+  // couldHang: boolean
+  isHanging: boolean
+
+  jumpedSinceFrames: number
+  jumpNeedsReset: boolean
+
+  constructor(pos: IPoint) {
+    this.x = pos.x
+    this.y = pos.y
+    this.width = 0.75
+    this.height = 0.75
     this.speedx = 0
     this.speedy = 0
     this.isOnGround = false
+
     this.couldUseLadder = false
     this.isUsingLadder = false
+
+    // this.couldHang = false
+    this.isHanging = false
+
     this.jumpedSinceFrames = 0
+    this.jumpNeedsReset = false
   }
 
   draw(ctx: CanvasRenderingContext2D, camera: Camera) {
-    ctx.fillStyle = '#9137a9';
+    ctx.fillStyle = '#b38333';
     if (this.isOnGround) {
-      ctx.fillStyle = '#312853';
+      ctx.fillStyle = '#886427';
+    }
+    if (this.isHanging) {
+      ctx.fillStyle = '#275388';
     }
     ctx.fillRect(
       camera.gameToScreenX(this.x),
@@ -51,12 +66,18 @@ export class Entity {
     // ${Math.floor(this.y / 0.012)}|
     // `
     // For step 1:
+    // return `
+    // ${(this.x)}|
+    // ${(this.y)}|
+    // ${this.isUsingLadder}|
+    // ${this.isHanging}|
+    // `
     return `
     ${Math.floor(this.x * 12)}|
     ${Math.floor(this.y * 12)}|
     ${Math.floor(this.speedy * 100)}|
     ${this.isUsingLadder}|
-    ${this.couldUseLadder}|
+    ${this.isHanging}|
     `
     // ${this.isUsingLadder}`
     // For step 4:
@@ -71,32 +92,39 @@ export class Entity {
 
   updateFromControls(controls: IControls) {
     // Left and right
-    if (controls.left) {
-      this.isUsingLadder = false
-      this.speedx = -0.1
-    } else if (controls.right) {
-      this.isUsingLadder = false
-      this.speedx = 0.1
+    if (controls.left && !this.isUsingLadder) {
+      this.speedx = -0.13
+    } else if (controls.right && !this.isUsingLadder) {
+      this.speedx = 0.13
     } else {
       this.speedx = 0
+    }
+
+    if (!controls.jump) {
+      this.jumpNeedsReset = false
     }
 
     // Juping
     if (
       controls.jump &&
       (
-        this.isOnGround || this.isUsingLadder || this.jumpedSinceFrames === 6
+        this.isHanging || this.isOnGround || this.isUsingLadder || this.jumpedSinceFrames === 8
+      ) &&
+      (
+        !this.jumpNeedsReset || this.jumpedSinceFrames === 8
       )
     ) {
-      this.speedy = -0.16
+      this.jumpNeedsReset = true
+      this.speedy = controls.down ? 0 : -0.13
       this.isUsingLadder = false
+      this.isHanging = false
       if (this.isOnGround || this.isUsingLadder) {
         this.jumpedSinceFrames = 0
       }
     }
 
     // Laddering
-    if (this.couldUseLadder && this.isUsingLadder) {
+    if (this.isUsingLadder) {
       this.speedy = 0
     }
     if (controls.up && this.couldUseLadder) {
@@ -105,11 +133,14 @@ export class Entity {
       this.speedx = 0
       this.x = Math.floor(this.x + this.width / 2) + (1 - this.width) / 2
     }
-    if (controls.down && this.couldUseLadder) {
+    if (controls.down && (this.couldUseLadder || this.isUsingLadder)) {
       this.isUsingLadder = true
       this.speedy = 0.07
       this.speedx = 0
       this.x = Math.floor(this.x + this.width) + (1 - this.width) / 2
+    }
+    if (controls.up && this.isUsingLadder && !this.couldUseLadder) {
+      this.speedy = 0
     }
   }
 
@@ -127,18 +158,56 @@ export class Entity {
     })
   }
 
-  update(map: GameMap) {
-    const eps = 0.11
+  innerUpdate(map: GameMap, sm: number) {
+    const eps = 0.05
 
     if (!this.isUsingLadder) {
-      this.speedy += 0.01
+      // this.speedy = Math.min(this.speedy + 0.01, eps - 0.001)
+      this.speedy = this.speedy + 0.01 * sm
     }
 
-    this.jumpedSinceFrames += 1
-    this.y += this.speedy
-    this.x += this.speedx
+    if (this.isHanging) {
+      this.speedx = 0
+      this.speedy = 0
+    }
+
+    this.y += this.speedy * sm
+    this.x += this.speedx * sm
     const center = this.getCenter()
     this.couldUseLadder = map.at(center.x, center.y) === 2
+
+    const wallsOnLeft = (
+      map.at(this.x, this.y + eps) === 1 ||
+      map.at(this.x, this.y + this.height - eps) === 1
+    )
+    const wallsOnRight = (
+      map.at(this.x + this.width, this.y + eps) === 1 ||
+      map.at(this.x + this.width, this.y + this.height - eps) === 1
+    )
+
+    // Hanging
+    if (this.speedy > 0 && map.at(center.x, center.y + this.height) !== 1) {
+      const lowEnoughForHanging = this.y - Math.floor(this.y) > 0.85
+      if (
+        lowEnoughForHanging &&
+        this.speedx < 0 &&
+        wallsOnLeft &&
+        map.at(this.x, this.y) !== 1
+      ) {
+        this.isHanging = true
+        this.y = Math.floor(this.y - eps) + 1
+      }
+      // Right
+      if (
+        lowEnoughForHanging &&
+        this.speedx > 0 &&
+        wallsOnRight &&
+        map.at(this.x + this.width + eps, this.y) !== 1
+      ) {
+        this.isHanging = true
+        this.y = Math.floor(this.y - eps) + 1
+      }
+    }
 
     // Ceiling
     if (
@@ -172,19 +241,25 @@ export class Entity {
     }
 
     // Walls left
-    if (
-      map.at(this.x, this.y + eps) === 1 ||
-      map.at(this.x, this.y + this.height - eps) === 1
-    ) {
+    if (wallsOnLeft) {
       this.x = Math.floor(this.x) + 1
     }
     // Walls right
-    if (
-      map.at(this.x + this.width, this.y + eps) === 1 ||
-      map.at(this.x + this.width, this.y + this.height - eps) === 1
-    ) {
+    if (wallsOnRight) {
       this.x = Math.floor(this.x + this.width) - this.width
     }
+  }
+
+  update(map: GameMap) {
+    this.jumpedSinceFrames += 1
+    const steps = 10
+    for (let i = 0; i < steps; i++) {
+      this.innerUpdate(map, 1 / steps)
+    }
+
+    // const storeRes = 8
+    // this.x = Math.floor(this.x * storeRes) / storeRes
+    // this.y = Math.floor(this.y * storeRes) / storeRes
   }
 
   clone(): Entity {

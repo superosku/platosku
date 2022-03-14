@@ -13,9 +13,18 @@ export class Camera {
     this.canvasHeight = canvasHeight
   }
 
+  getDrawBoundaries() {
+    return {
+      topLeftX: Math.floor((this.centerX - this.canvasWidth/ 2 / tileSize) + 0),
+      topLeftY: Math.floor((this.centerY - this.canvasHeight/ 2 / tileSize) + 0),
+      bottomRightX: Math.floor((this.centerX + this.canvasWidth/ 2 / tileSize) + 1),
+      bottomRightY: Math.floor((this.centerY + this.canvasHeight/ 2 / tileSize) + 1),
+    }
+  }
+
   moveTowards(x: number, y: number) {
-    this.centerX = x
-    this.centerY = y
+    this.centerX -= (this.centerX - x) * 0.5
+    this.centerY -= (this.centerY - y) * 0.5
   }
 
   gameToScreenX(x: number) {
