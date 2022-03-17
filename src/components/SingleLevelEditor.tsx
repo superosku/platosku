@@ -45,7 +45,7 @@ export const SingleLevelEditor: React.FC<ISingleLevelEditorProps> = (
   return <div className={'level'}>
     <div className={'tool-chooser'}>
       {
-        [0, 1, 2, 3, 4].map(n => {
+        [0, 1, 7, 2, 5, 6, 3, 4].map(n => {
           return <div
             key={n}
             className={`tile-type-${n}` + (n === tool ? ' active' : '')}

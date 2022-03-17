@@ -22,7 +22,9 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "worker-watch": "webpack -c webpack.worker.config.js --watch",
+    "worker": "webpack -c webpack.worker.config.js"
   },
   "eslintConfig": {
     "extends": [
@@ -41,5 +43,9 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "ts-loader": "^9.2.8",
+    "webpack-cli": "^4.9.2"
   }
 }

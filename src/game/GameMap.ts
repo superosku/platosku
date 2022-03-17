@@ -1,10 +1,11 @@
 import {IPoint, levelHeight, levelWidth, mapHeight, mapWidth, range, tileSize} from "../common";
-import {getPointScore, SearchPointScoreMap} from "./SearchPointScoreMap";
+import {SearchPointScoreMap} from "./SearchPointScoreMap";
 import {ILevelData} from "../components/LevelEditor";
 import {getRandomMap, IRandomMap} from "./levels";
+import {Camera} from "./Camera";
 
 import * as levelsJson from "../levels.json"
-import {Camera} from "./Camera";
+import {CanvasHandler} from "./CanvasHandler";
 
 const levelData: ILevelData = (levelsJson as any).default as ILevelData
 
@@ -12,8 +13,11 @@ export class GameMap {
   data: number[][]
   width: number
   height: number
+  canvasHandler: CanvasHandler
 
-  constructor() {
+  constructor(canvasHandler: CanvasHandler) {
+    this.canvasHandler = canvasHandler
+
     const randomMap: IRandomMap = getRandomMap(levelData)
 
     this.height = levelHeight * mapHeight
@@ -160,29 +164,47 @@ export class GameMap {
         ctx.fillRect(
           startDrawX + tileSize * x,
           startDrawY + tileSize * y,
-          // camera.gameToScreenX(x),
-          // camera.gameToScreenY(y),
           tileSize,
           tileSize
         );
+
+        if (this.data[x][y] === 0) {
+          this.canvasHandler.drawKeyTo(
+            ctx, 'background', 'regular', startDrawX + tileSize * x, startDrawY + tileSize * y
+          )
+        }
         if (this.data[x][y] === 2) {
-          ctx.beginPath()
-          ctx.lineWidth = 4
-          ctx.strokeStyle = '#543f16'
+          this.canvasHandler.drawKeyTo(
+            ctx, 'background', 'ladder', startDrawX + tileSize * x, startDrawY + tileSize * y
+          )
+        }
+        if (this.data[x][y] === 5) {
+          this.canvasHandler.drawKeyTo(
+            ctx, 'background', 'platform-ladder', startDrawX + tileSize * x, startDrawY + tileSize * y
+          )
+        }
+        if (this.data[x][y] === 6) {
+          this.canvasHandler.drawKeyTo(
+            ctx, 'background', 'platform', startDrawX + tileSize * x, startDrawY + tileSize * y
+          )
+        }
 
-          const ladderSpacing = tileSize / 4
-
-          // ctx.moveTo(0,0)
-          // ctx.lineTo(1000, 1000)
-          ctx.moveTo(camera.gameToScreenX(x) + 4, camera.gameToScreenY(y))
-          ctx.lineTo(camera.gameToScreenX(x) + 4, camera.gameToScreenY(y + 1))
-          ctx.moveTo(camera.gameToScreenX(x + 1) - 4, camera.gameToScreenY(y))
-          ctx.lineTo(camera.gameToScreenX(x + 1) - 4, camera.gameToScreenY(y + 1))
-          for (let i = 0; i < 4; i++) {
-            ctx.moveTo(camera.gameToScreenX(x), camera.gameToScreenY(y) + i * ladderSpacing)
-            ctx.lineTo(camera.gameToScreenX(x + 1), camera.gameToScreenY(y) + i * ladderSpacing)
-          }
-          ctx.stroke();
+        // Tiled ground
+        if (this.data[x][y] === 1 || this.data[x][y] === 7) {
+          const expected = this.data[x][y]
+          const canvasMapKey = (
+            (this.at(x, y - 1) === expected ? '#' : '_') +
+            (this.at(x - 1, y) === expected ? '#' : '_') +
+            (this.at(x + 1, y) === expected ? '#' : '_') +
+            (this.at(x, y + 1) === expected ? '#' : '_')
+          )
+          this.canvasHandler.drawKeyTo(
+            ctx,
+            this.data[x][y] === 1 ? 'ground' : 'wood',
+            canvasMapKey,
+            startDrawX + tileSize * x,
+            startDrawY + tileSize * y
+          )
         }
       }
     }
@@ -222,5 +244,10 @@ export class GameMap {
     }
 
     return this.data[x][y]
+  }
+
+  blockedAt(fx: number, fy: number) {
+    const val = this.at(fx, fy)
+    return val === 1 || val === 7
   }
 }

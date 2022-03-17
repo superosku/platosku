@@ -1,0 +1,14 @@
+.canvas-generator {
+  .corner-table {
+    td {
+      width: 20px;
+      height: 20px;
+      border: 1px solid black;
+      //background-color: black;
+      background-color: black;
+      &.full {
+        background-color: #989a9f;
+      }
+    }
+  }
+}

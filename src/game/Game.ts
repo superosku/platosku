@@ -5,6 +5,8 @@ import {KeyboardHandler} from "./KeyboardHandler";
 import {getPointScore, SearchPointScoreMap} from "./SearchPointScoreMap";
 import {controlChoices, doNothingControls, IControls, IPoint} from "../common";
 import {Camera} from "./Camera";
+import {worker} from "./worker";
+import {CanvasHandler} from "./CanvasHandler";
 
 interface IPathItem {
   x: number,
@@ -24,9 +26,16 @@ export class Game {
   frameIndex: number
   followerPath: IPathItem[]
   camera: Camera
+  canvasHandler: CanvasHandler
 
-  constructor(keyboardHandler: KeyboardHandler, canvasWidth: number, canvasHeight: number) {
-    this.map = new GameMap()
+  constructor(
+    keyboardHandler: KeyboardHandler,
+    canvasWidth: number,
+    canvasHeight: number,
+    canvasHandler: CanvasHandler
+  ) {
+    this.canvasHandler = canvasHandler
+    this.map = new GameMap(this.canvasHandler)
     const startPos = this.map.getStartCoors()
     this.player = new Entity(startPos)
     this.follower = new Entity(startPos)
@@ -38,6 +47,27 @@ export class Game {
     this.debugSearchPointScores = new SearchPointScoreMap(this.map)
     this.frameIndex = 0
     this.followerPath = []
+
+    worker.onmessage = (messageEvent) => {
+      // console.log('worker got message', messageEvent, messageEvent.data)
+      if (messageEvent.data.type === 'route-search-result') {
+        this.followerPath = messageEvent.data.payload.path
+        console.log('game: set followerPath', this.followerPath)
+      }
+    }
+    worker.onerror = (errorEvent) => {
+      console.log('game: worker got error')
+    }
+    worker.onmessageerror = (e) => {
+      console.log('game: worker got message error')
+    }
+
+    worker.postMessage({
+      type: 'set-game',
+      payload: {
+        game: {...this, canvasHandler: undefined, map: {...this.map, canvasHandler: undefined}}
+      }
+    });
   }
 
   updateGoalFromMouse(x: number, y: number) {
@@ -53,7 +83,8 @@ export class Game {
     // Draw debug points
     for (let i = 0; i < this.debugPoints.length; i++) {
       const db = this.debugPoints[i]
-      ctx.strokeStyle = 'rgba(32, 181, 39, 0.25)';
+      // ctx.strokeStyle = 'rgba(32, 181, 39, 0.25)';
+      ctx.strokeStyle = 'rgb(32, 181, 39)';
       ctx.beginPath();
       ctx.arc(
         this.camera.gameToScreenX(db.x + this.follower.width / 2),
@@ -87,13 +118,25 @@ export class Game {
 
   update() {
     if (this.keyboardHandler.pressed('t')) {
-      const {debugPoints} = this.routeSearch(this.player, 0, 0, 200, false)
+      const {debugPoints} = this.routeSearch(this.player, 0, 0, 250, false)
       this.debugPoints = debugPoints
     }
 
-    if (this.frameIndex % (60 * 3) === 0 && this.frameIndex !== 0) {
-      const {path} = this.routeSearch(this.follower, this.player.x, this.player.y)
-      this.followerPath = path
+    if (
+      this.frameIndex % (60 * 3) === 0 &&
+      this.frameIndex !== 0 &&
+      this.followerPath.length === 0
+    ) {
+      // const {path} = this.routeSearch(this.follower, this.player.x, this.player.y)
+      // this.followerPath = path
+      worker.postMessage({
+        type: 'route-search',
+        payload: {
+          entity: this.follower,
+          x: this.player.x,
+          y: this.player.y
+        }
+      });
     }
     if (this.followerPath.length > 0) {
       const pathItem = this.followerPath.shift()
@@ -204,7 +247,17 @@ export class Game {
           controls: controls,
         }
 
-        if (Math.floor(newEntity.x) === Math.floor(goalX) && Math.floor(newEntity.y) === Math.floor(goalY)) {
+        const isSteady = (
+          newHandledEntity.entity.isUsingLadder ||
+          newHandledEntity.entity.isOnGround ||
+          newHandledEntity.entity.isHanging
+        )
+
+        if (
+          Math.floor(newEntity.x) === Math.floor(goalX) &&
+          Math.floor(newEntity.y) === Math.floor(goalY) &&
+          isSteady
+        ) {
           winner = newHandledEntity
           break outerLoop
         }
@@ -213,7 +266,8 @@ export class Game {
           winner = newHandledEntity
         }
         if (
-          scoreEntity(newHandledEntity) < scoreEntity(winner)
+          scoreEntity(newHandledEntity) < scoreEntity(winner) &&
+          isSteady
         ) {
           winner = newHandledEntity
         }

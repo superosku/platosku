@@ -1,4 +1,4 @@
-export const tileSize = 48
+export const tileSize = 24 * 3
 
 // For a single map tile
 export const levelHeight = 8
@@ -46,4 +46,6 @@ export const controlChoices: IControls[] = [
 
   {left: true, right: false, down: false, up: false, jump: true}, // Jump move left
   {left: false, right: true, down: false, up: false, jump: true}, // Jump move right
+
+  {left: false, right: true, down: true, up: false, jump: true}, // Croutch down
 ]

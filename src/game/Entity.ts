@@ -22,10 +22,13 @@ export class Entity {
   jumpedSinceFrames: number
   jumpNeedsReset: boolean
 
+  couldCrouchDown: boolean
+  couldSideFromLadder: boolean
+
   constructor(pos: IPoint) {
     this.x = pos.x
     this.y = pos.y
-    this.width = 0.75
+    this.width = 0.55
     this.height = 0.75
     this.speedx = 0
     this.speedy = 0
@@ -39,6 +42,9 @@ export class Entity {
 
     this.jumpedSinceFrames = 0
     this.jumpNeedsReset = false
+
+    this.couldCrouchDown = false
+    this.couldSideFromLadder = false
   }
 
   draw(ctx: CanvasRenderingContext2D, camera: Camera) {
@@ -48,6 +54,9 @@ export class Entity {
     }
     if (this.isHanging) {
       ctx.fillStyle = '#275388';
+    }
+    if (this.isUsingLadder) {
+      ctx.fillStyle = '#226638';
     }
     ctx.fillRect(
       camera.gameToScreenX(this.x),
@@ -91,11 +100,20 @@ export class Entity {
   }
 
   updateFromControls(controls: IControls) {
+    if (!this.couldUseLadder && this.isUsingLadder) {
+      this.isUsingLadder = false
+    }
+
     // Left and right
-    if (controls.left && !this.isUsingLadder) {
+    // const couldSideFromLadder = (
+    //   this.isUsingLadder &&
+    // )
+    if (controls.left && (!this.isUsingLadder || this.couldSideFromLadder)) {
       this.speedx = -0.13
-    } else if (controls.right && !this.isUsingLadder) {
+      this.isUsingLadder = false
+    } else if (controls.right && (!this.isUsingLadder || this.couldSideFromLadder)) {
       this.speedx = 0.13
+      this.isUsingLadder = false
     } else {
       this.speedx = 0
     }
@@ -108,7 +126,11 @@ export class Entity {
     if (
       controls.jump &&
       (
-        this.isHanging || this.isOnGround || this.isUsingLadder || this.jumpedSinceFrames === 8
+        this.isHanging ||
+        this.isOnGround ||
+        this.isUsingLadder ||
+        this.jumpedSinceFrames === 8 ||
+        (controls.down && this.couldCrouchDown)
       ) &&
       (
         !this.jumpNeedsReset || this.jumpedSinceFrames === 8
@@ -116,9 +138,12 @@ export class Entity {
     ) {
       this.jumpNeedsReset = true
       this.speedy = controls.down ? 0 : -0.13
+      if (controls.down && this.couldCrouchDown) {
+        this.y += 0.06
+      }
       this.isUsingLadder = false
       this.isHanging = false
-      if (this.isOnGround || this.isUsingLadder) {
+      if (this.isOnGround || this.isUsingLadder || this.isHanging) {
         this.jumpedSinceFrames = 0
       }
     }
@@ -127,17 +152,17 @@ export class Entity {
     if (this.isUsingLadder) {
       this.speedy = 0
     }
-    if (controls.up && this.couldUseLadder) {
+    if (controls.up && this.couldUseLadder && !this.isHanging) {
       this.isUsingLadder = true
       this.speedy = -0.07
       this.speedx = 0
       this.x = Math.floor(this.x + this.width / 2) + (1 - this.width) / 2
     }
-    if (controls.down && (this.couldUseLadder || this.isUsingLadder)) {
+    if (controls.down && (this.couldUseLadder || this.isUsingLadder) && !this.isHanging) {
       this.isUsingLadder = true
       this.speedy = 0.07
       this.speedx = 0
-      this.x = Math.floor(this.x + this.width) + (1 - this.width) / 2
+      this.x = Math.floor(this.x + this.width / 2) + (1 - this.width) / 2
     }
     if (controls.up && this.isUsingLadder && !this.couldUseLadder) {
       this.speedy = 0
@@ -174,15 +199,16 @@ export class Entity {
     this.y += this.speedy * sm
     this.x += this.speedx * sm
     const center = this.getCenter()
-    this.couldUseLadder = map.at(center.x, center.y) === 2
+    const ladderTile = map.at(center.x, this.y + this.height - eps)
+    this.couldUseLadder = ladderTile === 2 || ladderTile === 5
 
     const wallsOnLeft = (
-      map.at(this.x, this.y + eps) === 1 ||
-      map.at(this.x, this.y + this.height - eps) === 1
+      map.blockedAt(this.x, this.y + eps) ||
+      map.blockedAt(this.x, this.y + this.height - eps)
     )
     const wallsOnRight = (
-      map.at(this.x + this.width, this.y + eps) === 1 ||
-      map.at(this.x + this.width, this.y + this.height - eps) === 1
+      map.blockedAt(this.x + this.width, this.y + eps) ||
+      map.blockedAt(this.x + this.width, this.y + this.height - eps)
     )
 
     // Hanging
@@ -192,7 +218,7 @@ export class Entity {
         lowEnoughForHanging &&
         this.speedx < 0 &&
         wallsOnLeft &&
-        map.at(this.x, this.y) !== 1
+        !map.blockedAt(this.x, this.y)
       ) {
         this.isHanging = true
         this.y = Math.floor(this.y - eps) + 1
@@ -202,7 +228,7 @@ export class Entity {
         lowEnoughForHanging &&
         this.speedx > 0 &&
         wallsOnRight &&
-        map.at(this.x + this.width + eps, this.y) !== 1
+        !map.blockedAt(this.x + this.width + eps, this.y)
       ) {
         this.isHanging = true
         this.y = Math.floor(this.y - eps) + 1
@@ -211,8 +237,11 @@ export class Entity {
 
     // Ceiling
     if (
-      map.at(this.x + eps, this.y) === 1 ||
-      map.at(this.x + this.width - eps, this.y) === 1
+      this.speedy < 0 &&
+      (
+        map.blockedAt(this.x + eps, this.y) ||
+        map.blockedAt(this.x + this.width - eps, this.y)
+      )
     ) {
       this.y = Math.floor(this.y) + 1
       this.speedy = 0
@@ -221,24 +250,72 @@ export class Entity {
     // Floor
     this.isOnGround = false
     if (
-      map.at(this.x + eps, this.y + this.height) === 1 ||
-      map.at(this.x + this.width - eps, this.y + this.height) === 1
-    ) {
-      this.speedy = 0
-      this.y = Math.floor(this.y + this.height) - this.height
-      this.isOnGround = true
-    }
-    // Was on floor and should still be able to jump
-    if (
+      this.speedy > 0 &&
       (
-        this.speedx > 0 &&
-        map.at(this.x + eps, this.y + this.height) !== 1 &&
-        map.at(this.x + eps - 0.2, this.y + this.height) === 1 &&
-        map.at(this.x + eps - 0.2, this.y + this.height - 0.2) !== 1
+        map.blockedAt(this.x + eps, this.y + this.height) ||
+        map.blockedAt(this.x + this.width - eps, this.y + this.height) ||
+        (
+          (
+            map.at(this.x + eps, this.y + this.height) === 5 ||
+            map.at(this.x + this.width - eps, this.y + this.height) === 5 ||
+            map.at(this.x + eps, this.y + this.height) === 6 ||
+            map.at(this.x + this.width - eps, this.y + this.height) === 6
+          ) && (
+            (this.y + this.height) - Math.floor((this.y + this.height)) < 0.05
+          )
+        )
       )
     ) {
-      this.isOnGround = true
+      if (!this.isUsingLadder || map.at(center.x, this.y + this.height + eps) === 1) {
+        this.speedy = 0
+        this.y = Math.floor(this.y + this.height) - this.height
+        this.isOnGround = true
+      }
     }
+
+    this.couldCrouchDown = (
+      this.isOnGround &&
+      (
+        (
+          map.at(this.x + eps, this.y + this.height + eps) === 5 ||
+          map.at(this.x + eps, this.y + this.height + eps) === 6
+        ) &&
+        (
+          map.at(this.x + this.width - eps, this.y + this.height) === 5 ||
+          map.at(this.x + this.width - eps, this.y + this.height) === 6
+        )
+      ) ||
+      (
+        (
+          map.at(this.x + eps, this.y + this.height + eps) === 0
+        ) &&
+        (
+          map.at(this.x + this.width - eps, this.y + this.height) === 5 ||
+          map.at(this.x + this.width - eps, this.y + this.height) === 6
+        )
+      ) ||
+      (
+        (
+          map.at(this.x + eps, this.y + this.height + eps) === 5 ||
+          map.at(this.x + eps, this.y + this.height + eps) === 6
+        ) &&
+        (
+          map.at(this.x + this.width - eps, this.y + this.height) === 0
+        )
+      )
+    )
+
+    // // Was on floor and should still be able to jump
+    // if (
+    //   (
+    //     this.speedx > 0 &&
+    //     map.at(this.x + eps, this.y + this.height) !== 1 &&
+    //     map.at(this.x + eps - 0.2, this.y + this.height) === 1 &&
+    //     map.at(this.x + eps - 0.2, this.y + this.height - 0.2) !== 1
+    //   )
+    // ) {
+    //   this.isOnGround = true
+    // }
 
     // Walls left
     if (wallsOnLeft) {
@@ -247,6 +324,21 @@ export class Entity {
     // Walls right
     if (wallsOnRight) {
       this.x = Math.floor(this.x + this.width) - this.width
+    }
+
+    // Going side from bottom of ladders
+    if (
+      this.isUsingLadder &&
+      (this.y + this.height - eps) - Math.floor(this.y + this.height - eps) > 0.5 &&
+      (
+        map.blockedAt(center.x, Math.floor(this.y + this.height - eps + 0.5)) ||
+        map.at(center.x, Math.floor(this.y + this.height - eps + 0.5)) === 5 ||
+        map.at(center.x, Math.floor(this.y + this.height - eps + 0.5)) === 6
+      )
+    ) {
+      this.couldSideFromLadder = true
+    } else {
+      this.couldSideFromLadder = false
     }
   }
 
