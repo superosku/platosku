@@ -112,16 +112,16 @@ export const CanvasGenerator = () => {
       // ctx.fillRect(x, y, tileSize, tileSize)
 
       if (choice.type === 'background') {
-        ctx.fillStyle = 'rgba(9,22,29,1)'
+        ctx.fillStyle = 'rgb(18,36,50)'
         ctx.fillRect(x, y, tileSize, tileSize)
 
         const cs = [
           // '#1a385344',
           // '#2a3b4c44',
           // '#8da3b711',
-          'rgba(9,22,29,0.27)',
-          'rgba(12,17,22,0.27)',
-          'rgba(42,49,55,0.07)',
+          'rgba(12,27,34,0.27)',
+          'rgba(18,29,34,0.27)',
+          'rgba(74,84,93,0.07)',
         ]
         for (let i = 0; i < 500; i++) {
           for (let j = 0; j < cs.length; j++) {

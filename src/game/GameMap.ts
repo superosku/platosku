@@ -115,7 +115,7 @@ export class GameMap {
           continue
         }
         // Not moveable tile
-        if (this.at(n.x, n.y) === 1) {
+        if (this.blockedAt(n.x, n.y)) {
           continue
         }
 
