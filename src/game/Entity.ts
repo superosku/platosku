@@ -4,58 +4,287 @@ import {KeyboardHandler} from "./KeyboardHandler";
 import {Camera} from "./Camera";
 
 
-export class Entity {
+const eps = 0.05
+
+type TTraitName = 'gravity-trait' | 'game-map-trait'
+
+class Trait {
+  traitName: TTraitName
+
+  constructor(traitName: TTraitName) {
+    this.traitName = traitName
+  }
+
+  update(entity: BaseEntity, map: GameMap, frameIndex: number) {
+
+  }
+}
+
+class GravityTrait extends Trait {
+  constructor() {
+    super('gravity-trait');
+  }
+
+  update(entity: BaseEntity, map: GameMap, frameIndex: number) {
+    super.update(entity, map, frameIndex)
+
+    if (!entity.isUsingLadder) {
+      entity.speedy = entity.speedy + 0.01
+    }
+  }
+}
+
+class GameMapTrait extends Trait {
+  constructor() {
+    super('game-map-trait');
+  }
+
+  innerUpdate(entity: BaseEntity, map: GameMap, sm: number) {
+    if (entity.isHanging) {
+      entity.speedx = 0
+      entity.speedy = 0
+    }
+
+    entity.y += entity.speedy * sm
+    entity.x += entity.speedx * sm
+    const center = entity.getCenter()
+    const ladderTile = map.at(center.x, entity.y + entity.height - eps)
+    entity.couldUseLadder = ladderTile === 2 || ladderTile === 5
+
+    const wallsOnLeft = (
+      map.blockedAt(entity.x, entity.y + eps) ||
+      map.blockedAt(entity.x, entity.y + entity.height - eps)
+    )
+    const wallsOnRight = (
+      map.blockedAt(entity.x + entity.width, entity.y + eps) ||
+      map.blockedAt(entity.x + entity.width, entity.y + entity.height - eps)
+    )
+
+    entity.hittingX = wallsOnRight || wallsOnLeft
+    entity.blockedLeft = wallsOnLeft
+    entity.blockedRight = wallsOnRight
+
+    entity.fallingLeft = (
+      entity.isOnGround &&
+      !map.walkableAt(entity.x - eps, entity.y + entity.height + eps)
+    )
+    entity.fallingRight = (
+      entity.isOnGround &&
+      !map.walkableAt(entity.x + eps + entity.width, entity.y + entity.height + eps)
+    )
+
+    // Hanging
+    if (entity.speedy > 0 && map.at(center.x, center.y + entity.height) !== 1) {
+      const lowEnoughForHanging = entity.y - Math.floor(entity.y) > 0.85
+      if (
+        entity.canHang &&
+        lowEnoughForHanging &&
+        entity.speedx < 0 &&
+        wallsOnLeft &&
+        !map.blockedAt(entity.x, entity.y)
+      ) {
+        entity.isHanging = true
+        entity.y = Math.floor(entity.y - eps) + 1
+      }
+      // Right
+      if (
+        entity.canHang &&
+        lowEnoughForHanging &&
+        entity.speedx > 0 &&
+        wallsOnRight &&
+        !map.blockedAt(entity.x + entity.width + eps, entity.y)
+      ) {
+        entity.isHanging = true
+        entity.y = Math.floor(entity.y - eps) + 1
+      }
+    }
+
+    // Ceiling
+    if (
+      entity.speedy < 0 &&
+      (
+        map.blockedAt(entity.x + eps, entity.y) ||
+        map.blockedAt(entity.x + entity.width - eps, entity.y)
+      )
+    ) {
+      entity.y = Math.floor(entity.y) + 1
+      entity.speedy = 0
+      entity.hittingY = true
+    }
+
+    // Floor
+    entity.isOnGround = false
+    if (
+      // entity.speedy > 0 &&
+      (
+        map.blockedAt(entity.x + eps, entity.y + entity.height) ||
+        map.blockedAt(entity.x + entity.width - eps, entity.y + entity.height) ||
+        (
+          (
+            map.at(entity.x + eps, entity.y + entity.height) === 5 ||
+            map.at(entity.x + entity.width - eps, entity.y + entity.height) === 5 ||
+            map.at(entity.x + eps, entity.y + entity.height) === 6 ||
+            map.at(entity.x + entity.width - eps, entity.y + entity.height) === 6
+          ) && (
+            (entity.y + entity.height) - Math.floor((entity.y + entity.height)) < 0.05
+          )
+        )
+      )
+    ) {
+      if (!entity.isUsingLadder || map.at(center.x, entity.y + entity.height + eps) === 1) {
+        entity.speedy = 0
+        entity.y = Math.floor(entity.y + entity.height) - entity.height
+        entity.isOnGround = true
+        entity.hittingY = true
+      }
+    }
+
+    // Crouching down
+    entity.couldCrouchDown = (
+      entity.isOnGround &&
+      (
+        (
+          map.at(entity.x + eps, entity.y + entity.height + eps) === 5 ||
+          map.at(entity.x + eps, entity.y + entity.height + eps) === 6
+        ) &&
+        (
+          map.at(entity.x + entity.width - eps, entity.y + entity.height) === 5 ||
+          map.at(entity.x + entity.width - eps, entity.y + entity.height) === 6
+        )
+      ) ||
+      (
+        (
+          map.at(entity.x + eps, entity.y + entity.height + eps) === 0
+        ) &&
+        (
+          map.at(entity.x + entity.width - eps, entity.y + entity.height) === 5 ||
+          map.at(entity.x + entity.width - eps, entity.y + entity.height) === 6
+        )
+      ) ||
+      (
+        (
+          map.at(entity.x + eps, entity.y + entity.height + eps) === 5 ||
+          map.at(entity.x + eps, entity.y + entity.height + eps) === 6
+        ) &&
+        (
+          map.at(entity.x + entity.width - eps, entity.y + entity.height) === 0
+        )
+      )
+    )
+
+    // Walls left
+    if (wallsOnLeft) {
+      entity.x = Math.floor(entity.x) + 1
+    }
+    // Walls right
+    if (wallsOnRight) {
+      entity.x = Math.floor(entity.x + entity.width) - entity.width
+    }
+
+    // Going side from bottom of ladders
+    if (
+      entity.isUsingLadder &&
+      (entity.y + entity.height - eps) - Math.floor(entity.y + entity.height - eps) > 0.5 &&
+      (
+        map.blockedAt(center.x, Math.floor(entity.y + entity.height - eps + 0.5)) ||
+        map.at(center.x, Math.floor(entity.y + entity.height - eps + 0.5)) === 5 ||
+        map.at(center.x, Math.floor(entity.y + entity.height - eps + 0.5)) === 6
+      )
+    ) {
+      entity.couldSideFromLadder = true
+    } else {
+      entity.couldSideFromLadder = false
+    }
+  }
+
+  update(entity: BaseEntity, map: GameMap, frameIndex: number) {
+    super.update(entity, map, frameIndex)
+
+    entity.hittingY = false
+    entity.hittingX = false
+
+    entity.jumpedSinceFrames += 1
+    const steps = 10
+    for (let i = 0; i < steps; i++) {
+      this.innerUpdate(entity, map, 1 / steps)
+    }
+  }
+}
+
+export const entityTraitMap = new Map<TTraitName, Trait>()
+entityTraitMap.set('game-map-trait', GameMapTrait.prototype)
+entityTraitMap.set('gravity-trait', GravityTrait.prototype)
+
+export class BaseEntity {
+  traits: Trait[]
+
   x: number
   y: number
   width: number
   height: number
   speedx: number
   speedy: number
+
   isOnGround: boolean
-
   couldUseLadder: boolean
-  isUsingLadder: boolean
-
-  // couldHang: boolean
-  isHanging: boolean
-
-  jumpedSinceFrames: number
-  jumpNeedsReset: boolean
-
   couldCrouchDown: boolean
   couldSideFromLadder: boolean
+  jumpedSinceFrames: number
+  jumpNeedsReset: boolean
+  isUsingLadder: boolean
+  isHanging: boolean
 
-  constructor(pos: IPoint) {
+  blockedLeft: boolean
+  blockedRight: boolean
+  fallingRight: boolean
+  fallingLeft: boolean
+
+  hittingY: boolean
+  hittingX: boolean
+
+  isDead: boolean
+  canHang: boolean
+
+  constructor(pos: IPoint, size: IPoint) {
+    this.traits = []
+
     this.x = pos.x
     this.y = pos.y
-    this.width = 0.55
-    this.height = 0.75
+    this.width = size.x
+    this.height = size.y
     this.speedx = 0
     this.speedy = 0
-    this.isOnGround = false
 
+    this.isOnGround = false
     this.couldUseLadder = false
     this.isUsingLadder = false
-
-    // this.couldHang = false
     this.isHanging = false
-
     this.jumpedSinceFrames = 0
     this.jumpNeedsReset = false
-
     this.couldCrouchDown = false
     this.couldSideFromLadder = false
+
+    this.blockedLeft = false
+    this.blockedRight = false
+    this.fallingLeft = false
+    this.fallingRight = false
+
+    this.hittingX = false
+    this.hittingY = false
+
+    this.isDead = false
+    this.canHang = true
   }
 
-  draw(ctx: CanvasRenderingContext2D, camera: Camera) {
-    ctx.fillStyle = '#b38333';
-    if (this.isOnGround) {
+  draw(ctx: CanvasRenderingContext2D, camera: Camera, fillStyle: string | undefined = undefined) {
+    ctx.fillStyle = fillStyle || '#b38333';
+    if (this.isOnGround && !fillStyle) {
       ctx.fillStyle = '#886427';
     }
-    if (this.isHanging) {
+    if (this.isHanging && !fillStyle) {
       ctx.fillStyle = '#275388';
     }
-    if (this.isUsingLadder) {
+    if (this.isUsingLadder && !fillStyle) {
       ctx.fillStyle = '#226638';
     }
     ctx.fillRect(
@@ -69,45 +298,18 @@ export class Entity {
   }
 
   getSearchHash() {
-    // return Math.random().toString()
-    // return `
-    // ${Math.floor(this.x / 0.7)}|
-    // ${Math.floor(this.y / 0.012)}|
-    // `
-    // For step 1:
-    // return `
-    // ${(this.x)}|
-    // ${(this.y)}|
-    // ${this.isUsingLadder}|
-    // ${this.isHanging}|
-    // `
     return `
     ${Math.floor(this.x * 12)}|
     ${Math.floor(this.y * 12)}|
     ${Math.floor(this.speedy * 100)}|
     ${this.isUsingLadder}|
-    ${this.isHanging}|
-    `
-    // ${this.isUsingLadder}`
-    // For step 4:
-    return `
-    ${Math.floor(this.x * 4)}|
-    ${Math.floor(this.y * 4)}|
-    ${Math.floor(this.speedy * 5)}|
-    ${this.isUsingLadder}|
-    ${this.couldUseLadder}|
-    ${this.isUsingLadder}`
+    ${this.isHanging}|`
   }
 
   updateFromControls(controls: IControls) {
     if (!this.couldUseLadder && this.isUsingLadder) {
       this.isUsingLadder = false
     }
-
-    // Left and right
-    // const couldSideFromLadder = (
-    //   this.isUsingLadder &&
-    // )
     if (controls.left && (!this.isUsingLadder || this.couldSideFromLadder)) {
       this.speedx = -0.13
       this.isUsingLadder = false
@@ -183,180 +385,206 @@ export class Entity {
     })
   }
 
-  innerUpdate(map: GameMap, sm: number) {
-    const eps = 0.05
-
-    if (!this.isUsingLadder) {
-      // this.speedy = Math.min(this.speedy + 0.01, eps - 0.001)
-      this.speedy = this.speedy + 0.01 * sm
-    }
-
-    if (this.isHanging) {
-      this.speedx = 0
-      this.speedy = 0
-    }
-
-    this.y += this.speedy * sm
-    this.x += this.speedx * sm
-    const center = this.getCenter()
-    const ladderTile = map.at(center.x, this.y + this.height - eps)
-    this.couldUseLadder = ladderTile === 2 || ladderTile === 5
-
-    const wallsOnLeft = (
-      map.blockedAt(this.x, this.y + eps) ||
-      map.blockedAt(this.x, this.y + this.height - eps)
-    )
-    const wallsOnRight = (
-      map.blockedAt(this.x + this.width, this.y + eps) ||
-      map.blockedAt(this.x + this.width, this.y + this.height - eps)
-    )
-
-    // Hanging
-    if (this.speedy > 0 && map.at(center.x, center.y + this.height) !== 1) {
-      const lowEnoughForHanging = this.y - Math.floor(this.y) > 0.85
-      if (
-        lowEnoughForHanging &&
-        this.speedx < 0 &&
-        wallsOnLeft &&
-        !map.blockedAt(this.x, this.y)
-      ) {
-        this.isHanging = true
-        this.y = Math.floor(this.y - eps) + 1
-      }
-      // Right
-      if (
-        lowEnoughForHanging &&
-        this.speedx > 0 &&
-        wallsOnRight &&
-        !map.blockedAt(this.x + this.width + eps, this.y)
-      ) {
-        this.isHanging = true
-        this.y = Math.floor(this.y - eps) + 1
-      }
-    }
-
-    // Ceiling
-    if (
-      this.speedy < 0 &&
-      (
-        map.blockedAt(this.x + eps, this.y) ||
-        map.blockedAt(this.x + this.width - eps, this.y)
-      )
-    ) {
-      this.y = Math.floor(this.y) + 1
-      this.speedy = 0
-    }
-
-    // Floor
-    this.isOnGround = false
-    if (
-      this.speedy > 0 &&
-      (
-        map.blockedAt(this.x + eps, this.y + this.height) ||
-        map.blockedAt(this.x + this.width - eps, this.y + this.height) ||
-        (
-          (
-            map.at(this.x + eps, this.y + this.height) === 5 ||
-            map.at(this.x + this.width - eps, this.y + this.height) === 5 ||
-            map.at(this.x + eps, this.y + this.height) === 6 ||
-            map.at(this.x + this.width - eps, this.y + this.height) === 6
-          ) && (
-            (this.y + this.height) - Math.floor((this.y + this.height)) < 0.05
-          )
-        )
-      )
-    ) {
-      if (!this.isUsingLadder || map.at(center.x, this.y + this.height + eps) === 1) {
-        this.speedy = 0
-        this.y = Math.floor(this.y + this.height) - this.height
-        this.isOnGround = true
-      }
-    }
-
-    this.couldCrouchDown = (
-      this.isOnGround &&
-      (
-        (
-          map.at(this.x + eps, this.y + this.height + eps) === 5 ||
-          map.at(this.x + eps, this.y + this.height + eps) === 6
-        ) &&
-        (
-          map.at(this.x + this.width - eps, this.y + this.height) === 5 ||
-          map.at(this.x + this.width - eps, this.y + this.height) === 6
-        )
-      ) ||
-      (
-        (
-          map.at(this.x + eps, this.y + this.height + eps) === 0
-        ) &&
-        (
-          map.at(this.x + this.width - eps, this.y + this.height) === 5 ||
-          map.at(this.x + this.width - eps, this.y + this.height) === 6
-        )
-      ) ||
-      (
-        (
-          map.at(this.x + eps, this.y + this.height + eps) === 5 ||
-          map.at(this.x + eps, this.y + this.height + eps) === 6
-        ) &&
-        (
-          map.at(this.x + this.width - eps, this.y + this.height) === 0
-        )
-      )
-    )
-
-    // // Was on floor and should still be able to jump
-    // if (
-    //   (
-    //     this.speedx > 0 &&
-    //     map.at(this.x + eps, this.y + this.height) !== 1 &&
-    //     map.at(this.x + eps - 0.2, this.y + this.height) === 1 &&
-    //     map.at(this.x + eps - 0.2, this.y + this.height - 0.2) !== 1
-    //   )
-    // ) {
-    //   this.isOnGround = true
-    // }
-
-    // Walls left
-    if (wallsOnLeft) {
-      this.x = Math.floor(this.x) + 1
-    }
-    // Walls right
-    if (wallsOnRight) {
-      this.x = Math.floor(this.x + this.width) - this.width
-    }
-
-    // Going side from bottom of ladders
-    if (
-      this.isUsingLadder &&
-      (this.y + this.height - eps) - Math.floor(this.y + this.height - eps) > 0.5 &&
-      (
-        map.blockedAt(center.x, Math.floor(this.y + this.height - eps + 0.5)) ||
-        map.at(center.x, Math.floor(this.y + this.height - eps + 0.5)) === 5 ||
-        map.at(center.x, Math.floor(this.y + this.height - eps + 0.5)) === 6
-      )
-    ) {
-      this.couldSideFromLadder = true
-    } else {
-      this.couldSideFromLadder = false
+  update(map: GameMap, frameIndex: number) {
+    for (let i = 0; i < this.traits.length; i++) {
+      const trait = this.traits[i]
+      trait.update(this, map, frameIndex)
     }
   }
 
-  update(map: GameMap) {
-    this.jumpedSinceFrames += 1
-    const steps = 10
-    for (let i = 0; i < steps; i++) {
-      this.innerUpdate(map, 1 / steps)
-    }
-
-    // const storeRes = 8
-    // this.x = Math.floor(this.x * storeRes) / storeRes
-    // this.y = Math.floor(this.y * storeRes) / storeRes
-  }
-
-  clone(): Entity {
+  clone(): BaseEntity {
     const clone = {...this}
-    Object.setPrototypeOf(clone, Entity.prototype)
+    Object.setPrototypeOf(clone, BaseEntity.prototype)
     return clone
+  }
+
+  gotHit() {
+    this.isDead = true
+  }
+
+  touches(other: BaseEntity) {
+    return (
+      other.x + other.width > this.x &&
+      other.x < this.x + this.width &&
+      other.y + other.height > this.y &&
+      other.y < this.y + this.height
+    )
+  }
+}
+
+export class Player extends BaseEntity {
+  constructor(pos: IPoint) {
+    super(pos, {x: 0.55, y: 0.75});
+    this.traits = [
+      new GameMapTrait(),
+      new GravityTrait(),
+    ]
+  }
+
+  interact(entity: BaseEntity) {
+    if (this.speedy < 0) {
+      return
+    }
+    if (
+      entity.x + entity.width > this.x &&
+      entity.x < this.x + this.width &&
+      this.y + this.height > entity.y &&
+      this.y + this.height < entity.y + 0.2
+    ) {
+      this.isHanging = false
+      this.isUsingLadder = false
+      this.speedy = -0.15
+      entity.gotHit()
+    }
+  }
+}
+
+export class FlyingEnemy extends BaseEntity {
+  speedxGoal: number
+  speedyGoal: number
+  randomOffset: number
+
+  constructor(pos: IPoint) {
+    super(pos, {x: 0.7, y: 0.4});
+    this.traits = [
+      new GameMapTrait(),
+    ]
+    this.speedxGoal = 0
+    this.speedyGoal = 0
+    this.canHang = false
+    this.randomOffset = Math.floor(Math.random() * 1000)
+    this.setRandomSpeed()
+  }
+
+  setRandomSpeed() {
+    const randomAngle = Math.random() * Math.PI * 2
+    const speedMultiplier = 0.02
+    const speedx = Math.sin(randomAngle) * speedMultiplier
+    const speedy = Math.cos(randomAngle) * speedMultiplier
+    this.speedxGoal = speedx
+    this.speedyGoal = speedy
+  }
+
+  update(map: GameMap, frameIndex: number) {
+    // const randomAngle = Math.sin(Math.random() * Math.PI * 2)
+    if ((frameIndex + this.randomOffset) % (60 * 5) === 0) {
+      this.setRandomSpeed()
+    }
+
+    if (this.hittingY) {
+      this.speedyGoal = -this.speedyGoal
+    }
+    if (this.hittingX) {
+      this.speedxGoal = -this.speedxGoal
+    }
+
+    this.speedx = this.speedxGoal
+    this.speedy = this.speedyGoal
+
+    super.update(map, frameIndex)
+  }
+
+  draw(ctx: CanvasRenderingContext2D, camera: Camera) {
+    super.draw(ctx, camera, '#8d2991')
+  }
+}
+
+export class WalkingEnemy extends BaseEntity {
+  direction: 'left' | 'right'
+
+  constructor(pos: IPoint) {
+    super(pos, {x: 0.5, y: 0.5});
+    this.traits = [
+      new GameMapTrait(),
+      new GravityTrait(),
+    ]
+    this.direction = Math.random() < 0.5 ? 'left' : 'right'
+    this.canHang = false
+  }
+
+  update(map: GameMap, frameIndex: number) {
+    if (this.direction === 'left') {
+      this.speedx = -0.02 - Math.random() * 0.002
+      if (this.blockedLeft || this.fallingLeft) {
+        this.direction = 'right'
+      }
+    } else {
+      this.speedx = +0.02 + Math.random() * 0.002
+      if (this.blockedRight || this.fallingRight) {
+        this.direction = 'left'
+      }
+    }
+
+    super.update(map, frameIndex)
+  }
+
+  draw(ctx: CanvasRenderingContext2D, camera: Camera) {
+    super.draw(ctx, camera, '#507a25')
+  }
+}
+
+type TCoinType = 'coin' | 'diamond'
+
+export class Coin extends BaseEntity {
+  type: TCoinType
+
+  constructor(pos: IPoint, type: TCoinType) {
+    super(pos, {x: 0.35, y: 0.35});
+    this.traits = [
+      new GameMapTrait(),
+      new GravityTrait(),
+    ]
+    this.canHang = false
+    this.type = type
+  }
+
+  update(map: GameMap, frameIndex: number) {
+    super.update(map, frameIndex)
+  }
+
+  draw(ctx: CanvasRenderingContext2D, camera: Camera) {
+    if (this.type === 'coin') {
+      ctx.fillStyle = '#cba722'
+      ctx.beginPath()
+      ctx.arc(
+        camera.gameToScreenX(this.x + this.width / 2),
+        camera.gameToScreenY(this.y + this.height / 2),
+        this.width / 2 * tileSize,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill()
+    } else {
+      const topX = camera.gameToScreenX(this.x)
+      const topY = camera.gameToScreenY(this.y)
+      ctx.fillStyle = '#1849c6'
+      ctx.beginPath()
+      // Top center
+      ctx.moveTo(
+        topX + this.width / 2 * tileSize,
+        topY
+      )
+      // Right middle
+      ctx.lineTo(
+        topX + this.width * tileSize,
+        topY + this.height * tileSize * 0.3
+      )
+      // Bottom center
+      ctx.lineTo(
+        topX + this.width / 2 * tileSize,
+        topY + this.height * tileSize
+      )
+      // Left middle
+      ctx.lineTo(
+        topX,
+        topY + this.height * tileSize * 0.3
+      )
+      // Top center
+      ctx.lineTo(
+        topX + this.width / 2 * tileSize,
+        topY
+      )
+      ctx.fill()
+    }
   }
 }

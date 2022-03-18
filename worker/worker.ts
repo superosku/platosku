@@ -1,7 +1,7 @@
 import {Game} from "../src/game/Game";
 import {GameMap} from "../src/game/GameMap";
 import {SearchPointScoreMap} from "../src/game/SearchPointScoreMap";
-import {Entity} from "../src/game/Entity";
+import {BaseEntity, entityTraitMap} from "../src/game/Entity";
 
 const ctx: Worker = self as any;
 
@@ -33,14 +33,21 @@ ctx.addEventListener(
         return
       }
       const startTime = performance.now()
+      let entity = Object.assign(event.data.payload.entity, BaseEntity.prototype)
+      for (let i = 0; i < entity.traits.length; i++) {
+        entity.traits[i] = Object.assign(
+          entity.traits[i],
+          entityTraitMap.get(entity.traits[i].traitName)
+        )
+      }
       const {path, debugPoints} = game.routeSearch(
-        Object.assign(event.data.payload.entity, Entity.prototype),
+        entity,
         event.data.payload.x,
         event.data.payload.y,
         5000
       )
       const searchTime = performance.now() - startTime
-      console.log('search took', searchTime/1000, 's, used', debugPoints.length, 'points')
+      console.log('search took', searchTime / 1000, 's, used', debugPoints.length, 'points')
       ctx.postMessage({
         type: 'route-search-result',
         payload: {

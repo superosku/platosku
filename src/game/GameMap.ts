@@ -250,4 +250,14 @@ export class GameMap {
     const val = this.at(fx, fy)
     return val === 1 || val === 7
   }
+
+  walkableAt(fx: number, fy: number) {
+    const val = this.at(fx, fy)
+    return val === 1 || val === 7 || val === 5 || val === 6
+  }
+
+  laddersAt(fx: number, fy: number) {
+    const val = this.at(fx, fy)
+    return val === 2 || val === 5
+  }
 }

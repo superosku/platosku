@@ -1,6 +1,6 @@
 import Heap from "heap-js";
 import {GameMap} from "./GameMap";
-import {Entity} from "./Entity";
+import {BaseEntity, Coin, FlyingEnemy, Player, WalkingEnemy} from "./Entity";
 import {KeyboardHandler} from "./KeyboardHandler";
 import {getPointScore, SearchPointScoreMap} from "./SearchPointScoreMap";
 import {controlChoices, doNothingControls, IControls, IPoint} from "../common";
@@ -16,8 +16,13 @@ interface IPathItem {
 
 export class Game {
   map: GameMap
-  player: Entity
-  follower: Entity
+
+  player: Player
+  follower: Player
+
+  enemies: BaseEntity[]
+  coins: Coin[]
+
   keyboardHandler: KeyboardHandler
   debugPoints: IPoint[]
   goalX: number
@@ -37,8 +42,8 @@ export class Game {
     this.canvasHandler = canvasHandler
     this.map = new GameMap(this.canvasHandler)
     const startPos = this.map.getStartCoors()
-    this.player = new Entity(startPos)
-    this.follower = new Entity(startPos)
+    this.player = new Player(startPos)
+    this.follower = new Player(startPos)
     this.camera = new Camera(canvasWidth, canvasHeight)
     this.keyboardHandler = keyboardHandler
     this.debugPoints = []
@@ -47,6 +52,33 @@ export class Game {
     this.debugSearchPointScores = new SearchPointScoreMap(this.map)
     this.frameIndex = 0
     this.followerPath = []
+
+    this.enemies = []
+    for (let i = 0; i < 200; i++) {
+      const x = Math.floor(Math.random() * this.map.width)
+      const y = Math.floor(Math.random() * this.map.height)
+      if (this.map.blockedAt(x, y)) {
+        i -= 1
+        continue
+      }
+      if (i % 2 === 0) {
+        this.enemies.push(new WalkingEnemy({x, y}))
+      } else {
+        this.enemies.push(new FlyingEnemy({x, y}))
+      }
+    }
+    this.coins = []
+    for (let i = 0; i < 200; i++) {
+      const x = Math.floor(Math.random() * this.map.width)
+      const y = Math.floor(Math.random() * this.map.height)
+      if (this.map.blockedAt(x, y)) {
+        i -= 1
+        continue
+      }
+      let coin = new Coin({x, y}, Math.random() < 0.5 ? 'diamond' : 'coin')
+      coin.x = coin.x + Math.random() * (1 - coin.width)
+      this.coins.push(coin)
+    }
 
     worker.onmessage = (messageEvent) => {
       // console.log('worker got message', messageEvent, messageEvent.data)
@@ -79,6 +111,15 @@ export class Game {
     this.map.draw(ctx, this.camera, this.debugSearchPointScores)
     this.player.draw(ctx, this.camera)
     this.follower.draw(ctx, this.camera)
+
+    for (let i = 0; i < this.enemies.length; i++) {
+      const enemy = this.enemies[i]
+      enemy.draw(ctx, this.camera)
+    }
+    for (let i = 0; i < this.coins.length; i++) {
+      const coin = this.coins[i]
+      coin.draw(ctx, this.camera)
+    }
 
     // Draw debug points
     for (let i = 0; i < this.debugPoints.length; i++) {
@@ -117,6 +158,9 @@ export class Game {
   }
 
   update() {
+    this.enemies = this.enemies.filter(e => !e.isDead)
+    this.coins = this.coins.filter(c => !c.touches(this.player))
+
     if (this.keyboardHandler.pressed('t')) {
       const {debugPoints} = this.routeSearch(this.player, 0, 0, 250, false)
       this.debugPoints = debugPoints
@@ -149,15 +193,28 @@ export class Game {
     }
     this.player.updateFromKeyboard(this.keyboardHandler)
 
-    this.follower.update(this.map)
-    this.player.update(this.map)
-    this.frameIndex += 1
+    this.follower.update(this.map, this.frameIndex)
+    this.player.update(this.map, this.frameIndex)
+
+    for (let i = 0; i < this.enemies.length; i++) {
+      const enemy = this.enemies[i]
+      enemy.update(this.map, this.frameIndex)
+      this.player.interact(enemy)
+    }
+
+    for (let i = 0; i < this.coins.length; i++) {
+      const coin = this.coins[i]
+      coin.update(this.map, this.frameIndex)
+      // this.player.interact(coin)
+    }
 
     this.camera.moveTowards(this.player.x, this.player.y)
+
+    this.frameIndex += 1
   }
 
   routeSearch(
-    entity: Entity,
+    entity: BaseEntity,
     goalX: number,
     goalY: number,
     maxPoints: number = 500,
@@ -167,7 +224,7 @@ export class Game {
     const pointScores = this.debugSearchPointScores
 
     interface HandledEntity {
-      entity: Entity,
+      entity: BaseEntity,
       parent: HandledEntity | undefined
       controls: IControls | undefined
     }
@@ -234,7 +291,7 @@ export class Game {
         const asdf = 1//i < 10 ? 1 : 10
         for (let x = 0; x < asdf; x++) {
           newEntity.updateFromControls(controls)
-          newEntity.update(this.map)
+          newEntity.update(this.map, this.frameIndex) // TODO: This might not be ok for everything in the future
         }
 
         if (hasher[newEntity.getSearchHash()]) {
